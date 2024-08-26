@@ -1,7 +1,3 @@
-Here's a README template for your GitHub repository, describing the Python script that scrapes data from the ACM Digital Library:
-
----
-
 # ACM Digital Library Data Scraper
 
 This Python script scrapes publication data from the ACM Digital Library, including titles, URLs, badges, abstracts, conference names, and published dates, and saves the extracted information into an Excel file.
