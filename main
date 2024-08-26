@@ -1,0 +1,91 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+from openpyxl import Workbook, load_workbook
+
+# Base URL of the page to scrape
+base_url = "https://dl.acm.org/action/doSearch?fillQuickSearch=false&target=advanced&ConceptID=118290&ConceptID=118211&expand=all&startPage={}&pageSize=50"
+
+# Excel file to store the titles, URLs, badges, abstracts, conference, and published dates
+excel_file = "acm_extracted_data.xlsx"
+
+# Clear the file at the start by creating a new workbook and writing the header
+wb = Workbook()
+ws = wb.active
+ws.title = "Scraped Data"
+ws.append(["Title", "URL", "Badges", "Abstract", "Conference", "Published"])
+wb.save(excel_file)
+
+# Loop through the pages from startPage=0 to startPage=71
+for page in range(39):
+    print(f"Getting page {page} of 39")
+    # Construct the URL for the current page
+    url = base_url.format(page)
+
+    # Send a request to the URL
+    response = requests.get(url)
+    response.raise_for_status()  # Ensure we got a valid response
+
+    # Parse the HTML content using BeautifulSoup
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    # Find all the list items with class "search__item issue-item-container"
+    search_items = soup.find_all("li", class_="search__item issue-item-container")
+
+    # Iterate over each search item and extract the necessary information
+    for item in search_items:
+        title_tag = item.find("span", class_="hlFld-Title")
+        if title_tag:
+            title = title_tag.get_text(strip=True)
+            link_tag = title_tag.find("a")
+            href = link_tag["href"] if link_tag else None
+            full_url = f"https://dl.acm.org{href}" if href else None
+
+            # Extract the alt text of the image in the publisher badge
+            badges = []
+            publisher_badge_div = item.find("div", class_="publisher-badge")
+            img_tag = publisher_badge_div.find("img") if publisher_badge_div else None
+            if img_tag and "alt" in img_tag.attrs:
+                badges.append(img_tag["alt"])
+
+            # Extract the data titles from the 'a' tags in the img-badget divs
+            img_badget_divs = item.find_all("div", class_="img-badget")
+            for div in img_badget_divs:
+                a_tag = div.find("a")
+                if a_tag and "data-title" in a_tag.attrs:
+                    badges.append(a_tag["data-title"])
+
+            # Join all badges with a semicolon
+            badges_str = "; ".join(badges)
+
+            # Extract the abstract from the search results page
+            abstract_div = item.find("div", class_="issue-item__abstract")
+            abstract_p = abstract_div.find("p") if abstract_div else None
+            abstract = abstract_p.get_text(strip=True) if abstract_p else None
+
+            # Extract the conference name
+            conference_span = item.find("span", class_="epub-section__title")
+            conference = (
+                conference_span.get_text(strip=True) if conference_span else None
+            )
+
+            # Extract the published date
+            dot_separator_spans = item.find_all("span", class_="dot-separator")
+            published_span = (
+                dot_separator_spans[0].find("span") if dot_separator_spans else None
+            )
+            published = published_span.get_text(strip=True) if published_span else None
+
+            # Append the data to the Excel file immediately
+            wb = load_workbook(excel_file)
+            ws = wb.active
+            ws.append([title, full_url, badges_str, abstract, conference, published])
+            wb.save(excel_file)
+
+            # Sleep for 10 seconds between each search result request
+            time.sleep(2)
+
+    # Sleep for 10 seconds between each page request
+    time.sleep(10)
+
+print(f"Data saved to {excel_file}")
